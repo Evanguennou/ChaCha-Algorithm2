@@ -1,0 +1,88 @@
+
+
+function convertToBytes(word) {  //convert a word in array of bites
+    const nb_byte = Math.ceil(word.toString(2).length / 8);
+    const bytes = new Array(nb_byte);
+    for (let i = 0; i < nb_byte; i++) {
+        bytes[i] = (word >>> (i * 8)) & 0xFF;
+    }
+    return bytes;
+}
+
+function convertToWord(bytes) {  //convert an array of bites in word
+    let word = 0;
+    for (let i = 0; i < bytes.length; i++) {
+        word |= bytes[i] << (i * 8);
+    }
+    return word;
+}
+
+function quarterRound(x1, x2, x3, x4) { //make the quarter round operations
+    x2 ^= (x1 + x4) >>> 0; //XOR operation in x2, use the result of x1+x4
+    x3 ^= (x2 + x1) >>> 0;
+    x4 ^= (x3 + x2) >>> 0;
+    x1 ^= (x4 + x3) >>> 0;
+    return [x1, x2, x3, x4];
+}
+
+function rowRound(state) {// to apply the round on the row
+    const lists = [1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14, 15, 0, 4, 8, 12];
+    return operations(state, lists);
+}
+
+function columnRound(state) {// to apply the round on the column
+    const lists = [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+    return operations(state, lists);
+}
+
+function doubleRound(state) {//Combine precedents functions
+    state = rowRound(state);
+    state = columnRound(state);
+    return state;
+}
+
+function operations(state, lists) { 
+    //Applies the quarter-round operation  on the provided lists.
+    [state[lists[0]], state[lists[1]], state[lists[2]], state[lists[3]]] = 
+        quarterRound(state[lists[0]], state[lists[1]], state[lists[2]], state[lists[3]]);
+    return state;
+}
+
+function core(state) {
+    //make 10 itterations
+    const stateF = [...state];
+    for (let _ = 0; _ < 10; _++) {
+        stateF = doubleRound(stateF);
+    }
+    state = state.map((s, i) => (s + stateF[i]) >>> 0);
+    return state;
+}
+
+function encr(plaintext, key, nonce) {
+    const state = [0x61707865, convertToWord(key.slice(0, 4)), convertToWord(key.slice(4, 8)), 0, 0x3320646e,//Initialize the state
+        convertToWord(nonce.slice(0, 4)), convertToWord(nonce.slice(4, 8)), 0];
+    const blockCount = Math.floor(plaintext.length / 64);
+    const skey = [];
+    for (let i = 0; i < blockCount; i++) {
+        // call the core to make rounds and produce ciphertexts
+        state[8] = i >>> 0;
+        state = core([...state]);
+        skey.push(...state.map(s => convertToBytes(s)).flat());
+    }
+    const ciphertext = plaintext.split('').map((p, i) => p.charCodeAt(0) ^ skey[i]);//keep the ciphertext
+    return Uint8Array.from(ciphertext);
+}
+
+
+//Main
+//initialize key and nonce for a 64-bit key 
+const key = new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80]); 
+const nonce = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]); 
+//choose the plaintext
+const plaintext = '';
+const ciphertext = encr(plaintext, key, nonce);
+
+//give the result
+console.log("Plaintext:", plaintext);
+console.log("Ciphertext:", Buffer.from(ciphertext).toString('hex'));
+
